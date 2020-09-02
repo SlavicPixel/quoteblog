@@ -1,0 +1,13 @@
+{% extends "layout.html" %}
+{% block content %}
+    <h1>Random Quote Picker</h1>
+    <article class="media content-section">
+        <div class="media-body">
+            <h2><a class="article-title">{{ random_quote.author }}</a></h2>
+            <p class="article-content">{{ random_quote.text }}</p>
+        </div>
+    </article>
+    <div class="btn btn-outline-info">
+        <a onClick="window.location.reload();">Another quote</a>
+    </div>
+{% endblock content %}  
