@@ -1,6 +1,9 @@
+import os
+import secrets
+from PIL import Image
 from flask import render_template, url_for, flash, redirect, request, session
 from quoteblog import app, db, bcrypt
-from quoteblog.forms import RegistrationForm, LoginForm, QuoteForm
+from quoteblog.forms import RegistrationForm, LoginForm, QuoteForm, UpdateAccountForm
 from quoteblog.models import User, Post
 from flask_login import login_user, current_user, logout_user, login_required
 from random import choice
@@ -38,16 +41,19 @@ posts = [
 @app.route("/")
 @app.route("/home")
 def home():
-    return render_template('home.html', posts=posts)
+    image_file = url_for('static', filename='profile_pics/' + current_user.image_file)
+    return render_template('home.html', posts=posts, image_file=image_file)
 
 @app.route('/random')
 def random_pick():
+    image_file = url_for('static', filename='profile_pics/' + current_user.image_file)
     random_quote = choice(quotes)
     session['random_quote'] = random_quote
-    return render_template('random.html', title='Random', random_quote=random_quote)
+    return render_template('random.html', title='Random', random_quote=random_quote, image_file=image_file)
 
 @app.route('/guess', methods=['GET', 'POST'])
 def guess():
+    image_file = url_for('static', filename='profile_pics/' + current_user.image_file)
     if request.method!='POST':
         random_pick()
     game_quote = session['random_quote']
@@ -59,21 +65,24 @@ def guess():
         else:
             flash(f'Wrong! The answer was {game_quote["author"]}.', 'danger')
             return redirect(url_for('result'))
-    return render_template('game.html', title='Game', form=form, random_quote=game_quote)
+    return render_template('game.html', title='Game', form=form, random_quote=game_quote, image_file=image_file)
 
 @app.route('/result')
 def result():
+    image_file = url_for('static', filename='profile_pics/' + current_user.image_file)
     random_pick()
-    return render_template('result.html', title='Result')
+    return render_template('result.html', title='Result', image_file=image_file)
 
 @app.route('/allquotes')
 def allquotes():
+    image_file = url_for('static', filename='profile_pics/' + current_user.image_file)
     all_quotes=quotes
-    return render_template('allquotes.html', quotes=all_quotes)
+    return render_template('allquotes.html', quotes=all_quotes, image_file=image_file)
 
 @app.route('/about')
 def about():
-    return render_template('about.html', title='About')
+    image_file = url_for('static', filename='profile_pics/' + current_user.image_file)
+    return render_template('about.html', title='About', image_file=image_file)
 
 @app.route("/register", methods=['GET', 'POST'])
 def register():
@@ -109,8 +118,35 @@ def logout():
     logout_user()
     return redirect(url_for('home'))
 
-@app.route('/account')
+def save_picture(form_picture):
+    random_hex = secrets.token_hex(8)
+    _, f_ext = os.path.splitext(form_picture.filename)
+    picture_fn = random_hex + f_ext     #Adding a hex filename to an updated profile picture
+    picture_path = os.path.join(app.root_path, 'static/profile_pics', picture_fn)
+
+    output_size = (125, 125)
+    i = Image.open(form_picture)
+    i.thumbnail(output_size)
+    i.save(picture_path)        #Saving profile picture with a smaller resolution
+
+    return picture_fn
+
+@app.route('/account', methods=['GET', 'POST'])
 @login_required
 def account():
-    return render_template('account.html', title='Account')
+    form = UpdateAccountForm()
+    if form.validate_on_submit():
+        if form.picture.data:
+            picture_file = save_picture(form.picture.data)
+            current_user.image_file = picture_file
+        current_user.username = form.username.data
+        current_user.email = form.email.data
+        db.session.commit()
+        flash('Your account has been updated!', 'success')
+        return redirect(url_for('account'))
+    elif request.method == 'GET':
+        form.username.data = current_user.username
+        form.email.data = current_user.email
+    image_file = url_for('static', filename='profile_pics/' + current_user.image_file)
+    return render_template('account.html', title='Account', image_file=image_file, form=form)
 

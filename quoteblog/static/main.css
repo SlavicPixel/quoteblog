@@ -69,6 +69,11 @@ body {
     margin-right: 20px;
     margin-bottom: 16px;
   }
+
+  .account-img-nav {
+    height: 35px;
+    width: 35px;
+  }
   
   .account-heading {
     font-size: 2.5rem;
