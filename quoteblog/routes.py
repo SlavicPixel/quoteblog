@@ -1,9 +1,9 @@
 import os
 import secrets
 from PIL import Image
-from flask import render_template, url_for, flash, redirect, request, session
+from flask import render_template, url_for, flash, redirect, request, session, abort
 from quoteblog import app, db, bcrypt
-from quoteblog.forms import RegistrationForm, LoginForm, QuoteForm, UpdateAccountForm
+from quoteblog.forms import RegistrationForm, LoginForm, QuoteForm, UpdateAccountForm, PostForm
 from quoteblog.models import User, Post
 from flask_login import login_user, current_user, logout_user, login_required
 from random import choice
@@ -23,37 +23,21 @@ with open('quoteblog/static/quotes.csv', "r") as file:
         else:
             first_line=False
 
-posts = [
-    {
-        'author': 'Corey Schafer',
-        'title': 'Blog Post 1',
-        'content': 'First post content',
-        'date_posted': 'April 20, 2018'
-    },
-    {
-        'author': 'Jane Doe',
-        'title': 'Blog Post 2',
-        'content': 'Second post content',
-        'date_posted': 'April 21, 2018'
-    }
-]
 
 @app.route("/")
 @app.route("/home")
 def home():
-    image_file = url_for('static', filename='profile_pics/' + current_user.image_file)
-    return render_template('home.html', posts=posts, image_file=image_file)
+    posts = Post.query.all()
+    return render_template('home.html', posts=posts)
 
 @app.route('/random')
 def random_pick():
-    image_file = url_for('static', filename='profile_pics/' + current_user.image_file)
     random_quote = choice(quotes)
     session['random_quote'] = random_quote
-    return render_template('random.html', title='Random', random_quote=random_quote, image_file=image_file)
+    return render_template('random.html', title='Random', random_quote=random_quote)
 
 @app.route('/guess', methods=['GET', 'POST'])
 def guess():
-    image_file = url_for('static', filename='profile_pics/' + current_user.image_file)
     if request.method!='POST':
         random_pick()
     game_quote = session['random_quote']
@@ -65,24 +49,21 @@ def guess():
         else:
             flash(f'Wrong! The answer was {game_quote["author"]}.', 'danger')
             return redirect(url_for('result'))
-    return render_template('game.html', title='Game', form=form, random_quote=game_quote, image_file=image_file)
+    return render_template('game.html', title='Game', form=form, random_quote=game_quote)
 
 @app.route('/result')
 def result():
-    image_file = url_for('static', filename='profile_pics/' + current_user.image_file)
     random_pick()
-    return render_template('result.html', title='Result', image_file=image_file)
+    return render_template('result.html', title='Result')
 
 @app.route('/allquotes')
 def allquotes():
-    image_file = url_for('static', filename='profile_pics/' + current_user.image_file)
     all_quotes=quotes
-    return render_template('allquotes.html', quotes=all_quotes, image_file=image_file)
+    return render_template('allquotes.html', quotes=all_quotes)
 
 @app.route('/about')
 def about():
-    image_file = url_for('static', filename='profile_pics/' + current_user.image_file)
-    return render_template('about.html', title='About', image_file=image_file)
+    return render_template('about.html', title='About')
 
 @app.route("/register", methods=['GET', 'POST'])
 def register():
@@ -150,3 +131,49 @@ def account():
     image_file = url_for('static', filename='profile_pics/' + current_user.image_file)
     return render_template('account.html', title='Account', image_file=image_file, form=form)
 
+@app.route('/post/new', methods=['GET', 'POST'])
+@login_required
+def new_post():
+    form = PostForm()
+    if form.validate_on_submit():
+        post = Post(title=form.title.data, content=form.content.data, author=current_user)
+        db.session.add(post)
+        db.session.commit()
+        flash('Your post has been created!', 'success')
+        return redirect(url_for('home'))
+    return render_template('create_post.html', title='New Post', form=form, legend='New Post')
+
+@app.route('/post/<int:post_id>')
+def post(post_id):
+    post = Post.query.get_or_404(post_id)
+    return render_template('post.html', title=post.title, post=post)
+
+@app.route('/post/<int:post_id>/update', methods=['GET', 'POST'])
+@login_required
+def update_post(post_id):
+    post = Post.query.get_or_404(post_id)
+    if post.author != current_user:
+        abort(403)
+    form = PostForm()
+    if form.validate_on_submit():
+        post.title = form.title.data
+        post.content = form.content.data
+        db.session.commit()
+        flash('Your post has been updated!', 'success')
+        return redirect(url_for('post', post_id=post.id))
+    elif request.method == 'GET':
+        form.title.data = post.title
+        form.content.data = post.content
+    return render_template('create_post.html', title='Update Post', 
+                            form=form, legend='Update Post')
+
+@app.route('/post/<int:post_id>/delete', methods=['POST'])
+@login_required
+def delete_post(post_id):
+    post = Post.query.get_or_404(post_id)
+    if post.author != current_user:
+        abort(403)                       
+    db.session.delete(post)
+    db.session.commit()
+    flash('Your post has been deleted!', 'success')
+    return redirect(url_for('home'))
