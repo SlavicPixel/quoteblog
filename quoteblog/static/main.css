@@ -88,5 +88,11 @@ body {
 
   .btn:hover, .btn:active, .btn-info {
     background-color: #4d4dff;
+    border: 1px solid #4d4dff;
+    color: white;
+  }
+
+  .btn-up:hover{
+    background-color: #4d4dff;
     color: white;
   }
